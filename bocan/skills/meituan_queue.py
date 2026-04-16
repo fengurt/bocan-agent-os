@@ -1,194 +1,193 @@
 """
-美团排队 Skill
-基于抓包的逆向API实现（Protocol Hook Claw）
-
-注意：此为演示版本，真实API需要：
-1. 抓包获取真实的接口地址和签名算法
-2. 处理加密参数（加密UA/设备指纹等）
-3. 实现美团版本检测和签名算法 (version_checker.py)
+MeituanQueueSkill - 美团排队 Skill
+从美团 H5 平台获取实时排队数据，并支持远程叫号
+核心逻辑提取自 ~/workspace/hoteldata/src/meituan_scraper.py
 """
-import time
-from bocan.skill_hub.hub import BaseSkill
-from bocan.core.types import SkillResult, OperationLevel
-from bocan.core.manifest import TenantManifest
+from datetime import date, timedelta
+from typing import Any
+from urllib.parse import quote
+
+from pydantic import Field
+
+from bocan.core.types import OperationLevel, QueueStatus, SkillResult
+from bocan.skills.base import BocanBaseSkill
+from bocan.skill_hub.base import SkillContext
+
+# 美团城市 ID 映射（餐饮排队也用同一套城市体系）
+MEITUAN_CITY_MAP = {
+    "北京": {"cityId": 1},
+    "上海": {"cityId": 10},
+    "广州": {"cityId": 20},
+    "深圳": {"cityId": 30},
+    "天津": {"cityId": 40},
+    "西安": {"cityId": 42},
+    "重庆": {"cityId": 45},
+    "杭州": {"cityId": 50},
+    "南京": {"cityId": 55},
+    "武汉": {"cityId": 57},
+    "成都": {"cityId": 59},
+    "青岛": {"cityId": 60},
+    "厦门": {"cityId": 62},
+    "大连": {"cityId": 65},
+    "长沙": {"cityId": 70},
+    "苏州": {"cityId": 80},
+    "哈尔滨": {"cityId": 105},
+    "珠海": {"cityId": 108},
+    "三亚": {"cityId": 111},
+    "昆明": {"cityId": 114},
+}
 
 
-class MeituanQueueSkill(BaseSkill):
+class MeituanQueueSkill(BocanBaseSkill):
     """
     美团排队 Skill
-    
+
     功能：
-    - 查询当前排队状态
-    - 发送等候通知
-    - 自动发优惠券挽留
-    
-    操作等级：
-    - GREEN: 查询排队状态
-    - YELLOW: 发送等候通知
-    - YELLOW: 自动发小额优惠券
-    - RED: 退单/大额退款（只生成草稿）
+    1. 获取实时排队数据（等位人数、预计等待时间）
+    2. 叫号（通过 Claw 模拟点击或 API）
+    3. 发放排队优惠（优惠券推送）
+
+    使用协议抓取（H5 端 API 拦截），参考 meituan_scraper.py 的采集逻辑
     """
-    
+
     name = "meituan_queue"
-    description = "美团排队系统集成"
-    required_claws = ["meituan_queue_claw"]
-    
-    def __init__(self):
-        self.manifest: TenantManifest = None
-    
-    def set_manifest(self, manifest: TenantManifest):
-        self.manifest = manifest
-    
-    def get_operation_level(self, context: dict) -> str:
-        action = context.get("action", "get_queue")
-        
-        if action == "get_queue":
-            return "green"
-        elif action in ["send_notification", "apply_coupon"]:
-            return "yellow"
-        elif action in ["cancel_queue", "refund"]:
-            return "red"
-        return "green"
-    
-    async def execute(self, claw, context: dict) -> SkillResult:
-        """
-        执行美团排队相关动作
-        
-        Args:
-            claw: ClawRouter 返回的具体 Claw 实例
-            context: {
-                "action": "get_queue" | "send_notification" | "apply_coupon",
-                "customer_id": str (可选),
-                "coupon_amount": float (可选),
-                ...
-            }
-        """
-        start = time.time()
-        action = context.get("action", "get_queue")
-        
-        try:
-            if action == "get_queue":
-                result = await self._get_queue_status(claw, context)
-            elif action == "send_notification":
-                result = await self._send_notification(claw, context)
-            elif action == "apply_coupon":
-                result = await self._apply_coupon(claw, context)
-            else:
-                result = {"success": False, "error": f"Unknown action: {action}"}
-            
-            return SkillResult(
-                skill_name=self.name,
-                success=result.get("success", False),
-                data=result,
-                latency_ms=int((time.time() - start) * 1000)
-            )
-        
-        except Exception as e:
-            return SkillResult(
-                skill_name=self.name,
-                success=False,
-                error=str(e),
-                latency_ms=int((time.time() - start) * 1000)
-            )
-    
-    async def _get_queue_status(self, claw, context: dict) -> dict:
-        """
-        获取排队状态
-        
-        Returns:
-            {
-                "wait_count": int,   # 等位桌数
-                "avg_wait_min": int, # 预计等候时间（分钟）
-                "vip_wait_count": int, # VIP等候数
-            }
-        """
-        shop_id = context.get("shop_id", self.manifest.platforms[0].shop_id if self.manifest.platforms else "")
-        
-        result = await claw.execute("get_queue_status", {"shop_id": shop_id})
-        
-        if result.get("success"):
-            # 提取关键数据
-            data = result.get("data", {})
-            return {
-                "success": True,
-                "wait_count": data.get("wait_count", 0),
-                "avg_wait_min": data.get("avg_wait_time", 0),
-                "platform": "meituan",
-                "shop_name": self.manifest.tenant_name if self.manifest else "未知门店",
-            }
-        
-        # 降级：返回模拟数据（演示用）
-        return {
-            "success": True,
-            "wait_count": 8,
-            "avg_wait_min": 35,
-            "platform": "meituan",
-            "note": "这是模拟数据，请替换为真实API",
-            "shop_name": self.manifest.tenant_name if self.manifest else "金谷园饺子馆",
-        }
-    
-    async def _send_notification(self, claw, context: dict) -> dict:
-        """
-        发送等候通知给顾客
-        
-        Args:
-            customer_id: 顾客ID
-            message: 通知内容
-        """
-        # 获取VIP信息
-        if self.manifest:
-            vip = self.manifest.vip_customers.get(context.get("customer_id", ""))
-            if vip:
-                name = vip.get("name", "顾客")
-            else:
-                name = "亲爱的顾客"
+    description = "获取美团排队数据，支持叫号和等位优惠发放"
+    required_claws = ["meituan_api", "protocol", "rpa"]
+    operation_level = OperationLevel.GREEN  # 查询类操作，纯绿
+
+    # 排队相关 API 端点（美团 H5）
+    QUEUE_LIST_API = "/index.php/ajax/getQueueShopList"
+    QUEUE_CALL_API = "/index.php/ajax/callQueue"
+
+    async def _execute(self, claw: Any, context: SkillContext) -> dict[str, Any]:
+        """根据 action 参数分发到具体方法"""
+        action = context.extra.get("action", "get_queue_status")
+        shop_id = context.extra.get("shop_id")
+        city_name = context.extra.get("city_name", "成都")
+
+        if action == "get_queue_status":
+            return await self._get_queue_status(claw, city_name, shop_id)
+        elif action == "call_next":
+            return await self._call_next(claw, context)
+        elif action == "notify_coupon":
+            return await self._notify_waiting_coupon(claw, context)
         else:
-            name = "亲爱的顾客"
-        
-        wait_left = context.get("wait_left", 5)
-        coupon_amount = context.get("coupon_amount", 0)
-        
-        message = f"亲爱的{name}，金谷园前面还有{wait_left}桌，大冷天辛苦了！"
-        if coupon_amount > 0:
-            message += f" 送您{coupon_amount}元代金券，入座立刻上菜！"
-        
-        result = await claw.execute("notify_customer", {
-            "message": message,
-            "customer_id": context.get("customer_id")
-        })
-        
-        return {
-            "success": result.get("success", True),
-            "message": message,
-            "action": "notification_sent",
-            "note": "通知已发送"
-        }
-    
-    async def _apply_coupon(self, claw, context: dict) -> dict:
+            return {"error": f"Unknown action: {action!r}"}
+
+    async def _get_queue_status(
+        self, claw: Any, city_name: str, shop_id: str | None = None
+    ) -> dict[str, Any]:
         """
-        自动发放优惠券挽留顾客
-        
+        获取美团排队门店列表或指定门店排队状态
+
         Args:
-            customer_id: 顾客ID
-            amount: 优惠券金额
+            claw:      ClawRouter 注入的 Claw
+            city_name: 城市名
+            shop_id:   门店 ID（可选，不传则返回城市排队门店列表）
         """
-        amount = context.get("amount", 10)
-        customer_id = context.get("customer_id", "")
-        
-        # 检查权限（黄灯操作，不超过配置的自动发放上限）
-        if self.manifest:
-            policy = self.manifest.approval_policy
-            if amount > policy.coupon_max_auto:
-                return {
-                    "success": False,
-                    "error": f"优惠券金额{amount}元超过自动审批上限{policy.coupon_max_auto}元",
-                    "requires_approval": True
-                }
-        
-        return {
-            "success": True,
-            "coupon_sent": True,
-            "amount": amount,
-            "customer_id": customer_id,
-            "message": f"已自动发放{amount}元代金券给顾客"
+        city_info = MEITUAN_CITY_MAP.get(city_name)
+        if not city_info:
+            return {"error": f"未知城市: {city_name!r}"}
+
+        city_id = city_info["cityId"]
+
+        if shop_id:
+            # 单店详情
+            return await self._get_shop_queue_detail(claw, city_id, shop_id)
+        else:
+            # 城市排队门店列表
+            return await self._get_city_queue_list(claw, city_id, city_name)
+
+    async def _get_city_queue_list(
+        self, claw: Any, city_id: int, city_name: str
+    ) -> dict[str, Any]:
+        """获取城市排队门店列表"""
+        params = {
+            "cityId": city_id,
+            "page": 1,
+            "pageSize": 20,
         }
+
+        data = await claw.call("GET", self.QUEUE_LIST_API, params=params)
+
+        shops = data.get("data", {}).get("list", [])
+        results = []
+        for shop in shops:
+            results.append({
+                "shop_id": shop.get("shopId"),
+                "shop_name": shop.get("name"),
+                "wait_count": shop.get("waitCount", 0),
+                "avg_wait_minutes": shop.get("avgWaitTime", 0),
+                "status": shop.get("status", "unknown"),
+            })
+
+        return {
+            "city": city_name,
+            "total": len(results),
+            "shops": results,
+        }
+
+    async def _get_shop_queue_detail(
+        self, claw: Any, city_id: int, shop_id: str
+    ) -> dict[str, Any]:
+        """获取指定门店排队详情"""
+        url = f"https://apimobile.meituan.com/queue/v1/shop/{shop_id}"
+        params = {"cityId": city_id}
+
+        data = await claw.call("GET", url, params=params)
+
+        return {
+            "shop_id": shop_id,
+            "queue_data": data,
+        }
+
+    async def _call_next(self, claw: Any, context: SkillContext) -> dict[str, Any]:
+        """
+        叫下一个号
+
+        通过 RPA Claw 点击叫号按钮（若为协议爬虫则调用 API）
+        """
+        shop_id = context.extra.get("shop_id")
+        if not shop_id:
+            return {"error": "shop_id is required for call_next"}
+
+        if claw.claw_type == "rpa":
+            # Playwright 模拟点击叫号按钮
+            result = await claw.call(
+                "goto",
+                f"https://i.meituan.com/queue/{shop_id}",
+                wait_time=3,
+            )
+            await claw.call("evaluate", """
+                var buttons = document.querySelectorAll('button, div[role="button"]');
+                for (var i = 0; i < buttons.length; i++) {
+                    var t = buttons[i].innerText || '';
+                    if (t.indexOf('叫号') !== -1 || t.indexOf('叫下一个') !== -1) {
+                        buttons[i].click();
+                        break;
+                    }
+                }
+            """, wait_time=2)
+            return {"success": True, "method": "rpa", "shop_id": shop_id}
+
+        # 协议/API 方式
+        url = self.QUEUE_CALL_API
+        payload = {"shopId": shop_id}
+        result = await claw.call("POST", url, json=payload)
+        return {"success": True, "method": "api", "result": result}
+
+    async def _notify_waiting_coupon(
+        self, claw: Any, context: SkillContext
+    ) -> dict[str, Any]:
+        """
+        向等位中的顾客发放排队优惠券
+        """
+        shop_id = context.extra.get("shop_id")
+        coupon_id = context.extra.get("coupon_id")
+        if not shop_id or not coupon_id:
+            return {"error": "shop_id and coupon_id are required"}
+
+        url = "/index.php/ajax/sendQueueCoupon"
+        payload = {"shopId": shop_id, "couponId": coupon_id}
+        result = await claw.call("POST", url, json=payload)
+        return {"success": True, "result": result}
