@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>博餐 Agent OS - 城厢古城餐厅</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f6fa;color:#2c3e50}
+.header{background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;padding:20px 30px}
+.header h1{font-size:24px}.header .sub{opacity:.9;font-size:13px;margin-top:4px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;padding:20px}
+.stat{background:#fff;border-radius:12px;padding:20px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.stat .v{font-size:30px;font-weight:700;color:#e74c3c}
+.stat .l{font-size:12px;color:#7f8c8d;margin-top:4px}
+.main{display:grid;grid-template-columns:1fr 360px;gap:20px;padding:0 20px 20px}
+.chat{background:#fff;border-radius:12px;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(0,0,0,.05);overflow:hidden}
+.chat-h{padding:15px 20px;border-bottom:1px solid #eee;font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+.badge{background:#e74c3c;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px}
+.msgs{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:10px;max-height:400px}
+.msg{max-width:85%;padding:12px 16px;border-radius:16px;font-size:14px;line-height:1.6;word-break:break-all}
+.msg.bot{background:#f8f9fa;align-self:flex-start;border-bottom-left-radius:4px}
+.msg.user{background:#e74c3c;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.msg.error{background:#fee;color:#c00;border:1px solid #fcc;align-self:flex-start}
+.msg.loading{background:#f8f9fa;align-self:flex-start;color:#999}
+.input-area{padding:15px 20px;border-top:1px solid #eee;display:flex;gap:10px}
+.inp{flex:1;padding:12px 16px;border:1px solid #ddd;border-radius:24px;font-size:14px;outline:none}
+.inp:focus{border-color:#e74c3c}
+.btn{padding:12px 24px;background:#e74c3c;color:#fff;border:none;border-radius:24px;cursor:pointer;font-weight:600}
+.btn:hover{background:#c0392b}
+.side{display:flex;flex-direction:column;gap:15px;overflow-y:auto}
+.panel{background:#fff;border-radius:12px;padding:15px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.panel h3{font-size:14px;margin-bottom:12px;color:#2c3e50}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.act{padding:10px;background:#f8f9fa;border:none;border-radius:8px;font-size:12px;cursor:pointer;transition:all .2s}
+.act:hover{background:#e74c3c;color:#fff}
+.log-item{display:flex;align-items:center;gap:8px;font-size:12px;padding:6px;background:#f8f9fa;border-radius:6px;margin-bottom:6px}
+.log-t{color:#95a5a6;min-width:40px}.log-s{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.log-r{font-size:14px}
+.health{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px}
+.health-item{background:#f8f9fa;padding:8px;border-radius:6px;text-align:center}
+.data-card{background:#f8f9fa;border-radius:8px;padding:10px;margin-top:8px;font-size:12px}
+.data-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #eee}
+@media(max-width:900px){.main{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🏮 博餐 Agent OS</h1>
+  <div class="sub">城厢古城主题餐厅 · AI 店长控制台</div>
+</div>
+<div class="stats">
+  <div class="stat"><div class="v" id="v1">--</div><div class="l">今日客流</div></div>
+  <div class="stat"><div class="v" id="v2">--</div><div class="l">当前排队(桌)</div></div>
+  <div class="stat"><div class="v" id="v3">--</div><div class="l">今日营收(¥)</div></div>
+  <div class="stat"><div class="v" id="v4">--</div><div class="l">AI执行次数</div></div>
+</div>
+<div class="main">
+  <div class="chat">
+    <div class="chat-h">
+      💬 AI 店长对话
+      <span class="badge" id="status-badge">🟢 演示模式</span>
+    </div>
+    <div class="msgs" id="msgs">
+      <div class="msg bot">
+        👋 你好！我是博餐 AI 店长。<br><br>
+        🏮 <b>演示模式</b>：当前显示模拟数据<br>
+        🚀 <b>生产模式</b>：连接真实 Skills + Claws<br><br>
+        试试快捷指令，或直接输入自然语言：
+      </div>
+    </div>
+    <div class="input-area">
+      <input class="inp" id="inp" placeholder="输入指令：查看排队 / 虾仁水饺估清 / 检查舆情" onkeypress="if(event.key==='Enter')send()">
+      <button class="btn" onclick="send()">发送</button>
+    </div>
+  </div>
+  <div class="side">
+    <div class="panel">
+      <h3>⚡ 快捷指令</h3>
+      <div class="actions">
+        <button class="act" onclick="q('查看当前排队人数')">📊 排队人数</button>
+        <button class="act" onclick="q('查看今日营收')">💰 今日营收</button>
+        <button class="act" onclick="q('虾仁水饺估清')">📦 估清下架</button>
+        <button class="act" onclick="q('检查最新评价')">🛡️ 检查舆情</button>
+        <button class="act" onclick="q('发放雨天外卖券')">🌧️ 雨天营销</button>
+        <button class="act" onclick="q('VIP客户情况')">👑 VIP营销</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>📜 最近操作记录</h3>
+      <div id="log"></div>
+    </div>
+    <div class="panel">
+      <h3>🟢 系统状态</h3>
+      <div class="health" id="health">
+        <div class="health-item">meituan_queue<br><b>✅ 就绪</b></div>
+        <div class="health-item">inventory_sync<br><b>✅ 就绪</b></div>
+        <div class="health-item">review_defender<br><b>✅ 就绪</b></div>
+        <div class="health-item">coupon_dispatch<br><b>✅ 就绪</b></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>🎯 四大核心 Skill</h3>
+      <div class="data-card">
+        <div class="data-row"><span>🔄 排队管理</span><span>meituan_queue</span></div>
+        <div class="data-row"><span>📦 库存同步</span><span>inventory_sync</span></div>
+        <div class="data-row"><span>🛡️ 舆情监控</span><span>review_defender</span></div>
+        <div class="data-row"><span>🎫 优惠券引擎</span><span>coupon_dispatch</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+// =============================================
+// Demo Mode - Pure Frontend Simulation
+// =============================================
+const DEMO = true;
+const API_BASE = ''; // Set to your backend URL in production
+
+const STATS = {today_visitors:127,queue_now:8,revenue_today:4523,ai_actions_today:23};
+const LOG = [
+  {time:"13:02",action:"自动发放等位券",status:"✅"},
+  {time:"12:45",action:"库存同步(3平台)",status:"✅"},
+  {time:"12:30",action:"舆情检查完成",status:"✅"},
+  {time:"11:15",action:"回复差评",status:"✅"},
+  {time:"10:00",action:"天气营销推送",status:"✅"},
+];
+
+const RESPONSES = {
+  "排队": () => `📊 <b>当前排队状态</b>\n\n城厢古城主题餐厅：8桌 | 约25分钟\n金谷园饺子馆(城厢店)：3桌 | 约10分钟\n\n✅ 排队正常，无需干预。`,
+  "估清": (item) => `📦 <b>库存同步完成</b>\n\n平台：美团 / 饿了么 / 抖音团购\n商品：${item || '虾仁水饺'}\n操作：标记售罄\n耗时：2.3秒\n\n✅ 3个平台已同步完成！`,
+  "舆情": () => `🛡️ <b>舆情监控报告</b>\n\n检查平台：美团 / 大众点评 / 饿了么\n新增差评：0条\n近1小时：无异常\n\n✅ 门店口碑良好，继续保持！`,
+  "营收": () => `💰 <b>今日营收概况</b>\n\n今日营收：¥4,523\n较昨日：+12%\n\n🏆 爆款：招牌水饺 ¥1,832\n🥗 凉菜拼盘 ¥856\n🥟 饺子套餐 ¥654\n\n📈 建议：招牌水饺可适当备货增加。`,
+  "雨天": () => `🌧️ <b>天气营销已触发</b>\n\n根据天气预报（今日有雨）\n已自动在私域客户群推送：\n『雨天专属外卖券』\n\n触达客户：87人\n预计转化：约15单\n\n✅ 营销推送完成！`,
+  "vip": () => `👑 <b>VIP 客户概况</b>\n\nVIP总数：23人\n本月活跃：18人 (78%)\n\n🏅 钻石客户：张先生\n   累计消费：¥8,888\n\n💡 建议：本周可针对TOP10 VIP\n   发放专属生日/节日优惠券。`,
+};
+
+function getResponse(msg) {
+  const m = msg.toLowerCase();
+  if (m.includes('排队') || m.includes('等位')) return RESPONSES['排队']();
+  if (m.includes('估清') || m.includes('下架') || m.includes('售罄')) {
+    let item = '虾仁水饺';
+    if (m.includes('招牌')) item = '招牌水饺';
+    if (m.includes('三鲜')) item = '三鲜水饺';
+    return RESPONSES['估清'](item);
+  }
+  if (m.includes('舆情') || m.includes('差评') || m.includes('评价')) return RESPONSES['舆情']();
+  if (m.includes('营收') || m.includes('收入')) return RESPONSES['营收']();
+  if (m.includes('雨')) return RESPONSES['雨天']();
+  if (m.includes('vip') || m.includes('会员') || m.includes('熟客')) return RESPONSES['vip']();
+  return `🤖 已收到指令：「${msg}」\n\n当前为演示模式。连接后端后可执行真实操作。\n\n支持的指令：排队/营收/估清/舆情/雨天/VIP`;
+}
+
+const inp=document.getElementById('inp');
+const msgs=document.getElementById('msgs');
+function add(html,type){
+  const d=document.createElement('div');d.className='msg '+type;d.innerHTML=html;
+  msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;return d;
+}
+function q(m){inp.value=m;send()}
+function send(){
+  const v=inp.value.trim();if(!v)return;
+  add(v,'user');inp.value='';
+  const loading=add('⚙️ 处理中...','loading');
+  if(DEMO){
+    setTimeout(()=>{
+      loading.remove();
+      add(getResponse(v),'bot');
+      STATS.ai_actions_today++;
+      document.getElementById('v4').textContent=STATS.ai_actions_today;
+      LOG.unshift({time:new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}),action:v.substring(0,12),status:'✅'});
+      renderLog();
+    },600);
+  } else {
+    fetch(API_BASE+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:v})})
+    .then(r=>r.json()).then(r=>{loading.remove();add(r.data?JSON.stringify(r.data,null,2):r.message||'完成','bot');})
+    .catch(e=>{loading.remove();add('❌ 网络错误','error');});
+  }
+}
+function renderLog(){
+  document.getElementById('log').innerHTML=LOG.slice(0,5).map(l=>
+    `<div class="log-item"><span class="log-t">${l.time}</span><span class="log-s">${l.action}</span><span class="log-r">${l.status}</span></div>`).join('');
+}
+document.getElementById('v1').textContent=STATS.today_visitors;
+document.getElementById('v2').textContent=STATS.queue_now;
+document.getElementById('v3').textContent=STATS.revenue_today;
+document.getElementById('v4').textContent=STATS.ai_actions_today;
+renderLog();
+</script>
+</body>
+</html>

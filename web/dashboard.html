@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>博餐 Agent OS - 城厢古城餐厅</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f6fa;color:#2c3e50}
+.header{background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;padding:20px 30px}
+.header h1{font-size:24px}.header .sub{opacity:.9;font-size:13px;margin-top:4px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;padding:20px}
+.stat{background:#fff;border-radius:12px;padding:20px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.stat .v{font-size:30px;font-weight:700;color:#e74c3c}
+.stat .l{font-size:12px;color:#7f8c8d;margin-top:4px}
+.main{display:grid;grid-template-columns:1fr 360px;gap:20px;padding:0 20px 20px;height:calc(100vh-220px)}
+.chat{background:#fff;border-radius:12px;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(0,0,0,.05);overflow:hidden}
+.chat-h{padding:15px 20px;border-bottom:1px solid #eee;font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+.badge{background:#e74c3c;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px}
+.msgs{fxxlex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:10px;max-height:400px}
+.msg{max-width:85%;padding:12px 16px;border-radius:16px;font-size:14px;line-height:1.6}
+.msg.bot{background:#f8f9fa;align-self:flex-start;border-bottom-left-radius:4px}
+.msg.user{background:#e74c3c;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.msg.error{background:#fee;color:#c00;border:1px solid #fcc;align-self:flex-start}
+.msg.loading{background:#f8f9fa;align-self:flex-start;color:#7f8c8d}
+.input-area{padding:15px 20px;border-top:1px solid #eee;display:flex;gap:10px}
+.inp{flex:1;padding:12px 16px;border:1px solid #ddd;border-radius:24px;font-size:14px;outline:none}
+.inp:focus{border-color:#e74c3c}
+.btn{padding:12px 24px;background:#e74c3c;color:#fff;border:none;border-radius:24px;cursor:pointer;font-weight:600}
+.btn:hover{background:#c0392b}
+.side{display:flex;flex-direction:column;gap:15px;overflow-y:auto}
+.panel{background:#fff;border-radius:12px;padding:15px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.panel h3{font-size:14px;margin-bottom:12px;color:#2c3e50}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.act{padding:10px;background:#f8f9fa;border:none;border-radius:8px;font-size:12px;cursor:pointer;transition:all .2s}
+.act:hover{background:#e74c3c;color:#fff}
+.log-item{display:flex;align-items:center;gap:8px;font-size:12px;padding:6px;background:#f8f9fa;border-radius:6px;margin-bottom:6px}
+.log-t{color:#95a5a6;min-width:40px}.log-s{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.log-r{font-size:14px}
+.health{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px}
+.health-item{background:#f8f9fa;padding:8px;border-radius:6px;text-align:center}
+@media(max-width:900px){.main{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🏮 博餐 Agent OS</h1>
+  <div class="sub">城厢古城主题餐厅 · AI 店长控制台 · v0.1.0</div>
+</div>
+<div class="stats">
+  <div class="stat"><div class="v" id="v1">--</div><div class="l">今日客流</div></div>
+  <div class="stat"><div class="v" id="v2">--</div><div class="l">当前排队(桌)</div></div>
+  <div class="stat"><div class="v" id="v3">--</div><div class="l">今日营收(¥)</div></div>
+  <div class="stat"><div class="v" id="v4">--</div><div class="l">AI执行次数</div></div>
+</div>
+<div class="main">
+  <div class="chat">
+    <div class="chat-h">
+      💬 AI 店长对话
+      <span class="badge" id="status-badge">🟢 在线</span>
+    </div>
+    <div class="msgs" id="msgs">
+      <div class="msg bot">👋 你好！我是博餐 AI 店长。<br><br>🏮 当前模式：演示版本（模拟数据）<br>🚀 真实部署后连接 Skills + Claws<br><br>试试快捷指令：</div>
+    </div>
+    <div class="input-area">
+      <input class="inp" id="inp" placeholder="输入指令：查看排队 / 虾仁水饺估清 / 检查舆情" onkeypress="if(event.key==='Enter')send()">
+      <button class="btn" onclick="send()">发送</button>
+    </div>
+  </div>
+  <div class="side">
+    <div class="panel">
+      <h3>⚡ 快捷指令</h3>
+      <div class="actions">
+        <button class="act" onclick="q('查看当前排队人数')">📊 排队人数</button>
+        <button class="act" onclick="q('查看今日营收')">💰 今日营收</button>
+        <button class="act" onclick="q('虾仁水饺估清')">📦 估清下架</button>
+        <button class="act" onclick="q('检查最新评价')">🛡️ 检查舆情</button>
+        <button class="act" onclick="q('发放雨天外卖券')">🌧️ 雨天营销</button>
+        <button class="act" onclick="q('VIP客户情况')">👑 VIP营销</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>📜 最近操作记录</h3>
+      <div id="log"></div>
+    </div>
+    <div class="panel">
+      <h3>🟢 系统状态</h3>
+      <div class="health" id="health"></div>
+    </div>
+  </div>
+</div>
+<script>
+const inp=document.getElementById('inp');
+const msgs=document.getElementById('msgs');
+function add(html,type){
+  const d=document.createElement('div');d.className='msg '+type;d.innerHTML=html;
+  msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;return d;
+}
+function q(m){inp.value=m;send()}
+async function send(){
+  const v=inp.value.trim();if(!v)return;
+  add(v,'user');inp.value='';
+  const loading=add('⚙️ 处理中...','loading');
+  try{
+    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:v})}).then(r=>r.json());
+    loading.remove();
+    if(r.success){
+      const data=r.data||{};
+      if(data.level==='green') add(r.data? JSON.stringify(data,null,2): r.message||'执行完成','bot');
+      else if(data.level==='yellow') add('⚠️ '+r.data? JSON.stringify(data,null,2): r.message,'bot');
+      else add(r.data? JSON.stringify(data,null,2): r.message,'bot');
+    } else add('❌ '+r.message,'error');
+  }catch(e){loading.remove();add('❌ 网络错误','error');}
+  loadAll();
+}
+async function loadAll(){loadStats();loadLog();loadHealth();}
+async function loadStats(){
+  try{const d=await fetch('/api/stats').then(r=>r.json());document.getElementById('v1').textContent=d.today_visitors;document.getElementById('v2').textContent=d.queue_now;document.getElementById('v3').textContent=d.revenue_today;document.getElementById('v4').textContent=d.ai_actions_today;}catch(e){}
+}
+async function loadLog(){
+  try{const d=await fetch('/api/log').then(r=>r.json());document.getElementById('log').innerHTML=d.map(l=>`<div class="log-item"><span class="log-t">${l.time}</span><span class="log-s">${l.action}</span><span class="log-r">${l.status}</span></div>`).join('');}catch(e){}
+}
+async function loadHealth(){
+  try{
+    const d=await fetch('/api/health').then(r=>r.json());
+    const skills=Object.entries(d.skills||{}).map(([k,v])=>`<div class="health-item">${k}<br><b>${v}</b></div>`).join('');
+    const claws=Object.entries(d.claws||{}).map(([k,v])=>`<div class="health-item">${k}<br><b>${v}</b></div>`).join('');
+    document.getElementById('health').innerHTML=skills+claws;
+  }catch(e){}
+}
+loadAll();setInterval(loadAll,30000);
+</script>
+</body>
+</html>

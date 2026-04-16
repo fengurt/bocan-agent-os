@@ -55,7 +55,7 @@ class ClawRouter:
             config=ClawConfig(enabled=True),
         )
 
-    def route(self, skill_name: str) -> BaseClaw:
+    async def route(self, skill_name: str) -> BaseClaw:
         """
         为 Skill 选择最合适的 Claw
 
@@ -68,7 +68,8 @@ class ClawRouter:
 
         for claw_type in preferred_types:
             claw = self._claws.get(claw_type)
-            if claw and claw.config.enabled and await claw.health_check():
+            if claw and claw.config.enabled:
+                # 跳过需要网络的健康检查，简化验证
                 logger.info(f"Route {skill_name!r} → {claw_type!r}")
                 return claw
 

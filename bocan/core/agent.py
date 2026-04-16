@@ -74,7 +74,7 @@ class BocanAgent:
                 continue
                 
             # 获取对应 Claw
-            claw = self.claw_router.route(skill_name)
+            claw = await self.claw_router.route(skill_name)
             result = await skill.execute(claw, plan.context)
             skill_results.append(result)
             

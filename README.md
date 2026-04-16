@@ -13,7 +13,58 @@
 自然语言指令 → Agent 大脑 → 标准 Skill 总线 → 多模态 Claw → 各平台 API/抓包/RPA/IoT
 ```
 
-## 五大架构
+## 🎯 四大核心 Skill（已实现）
+
+| Skill | 功能 | 状态 |
+|-------|------|------|
+| 🔄 **meituan_queue** | 美团排队实时监控+叫号 | ✅ 可用 |
+| 📦 **inventory_sync** | 全域库存同步（一句话"估清"所有平台） | ✅ 可用 |
+| 🛡️ **review_defender** | 舆情监控+黄金5分钟危机公关 | ✅ 可用 |
+| 🎫 **coupon_dispatch** | 优惠券引擎（等位/雨天/差评自动发券） | ✅ 可用 |
+
+## 🖥️ Web Dashboard
+
+```bash
+# 本地运行
+python web/standalone.py
+# 访问 http://localhost:8000
+```
+
+![Dashboard Preview](https://img.shields.io/badge/Dashboard-红色主题-blue.svg)
+
+## 📦 快速安装
+
+```bash
+git clone https://github.com/fengurt/bocan-agent-os.git
+cd bocan-agent-os
+pip install -e .
+```
+
+## 🚀 一键部署
+
+### Docker
+```bash
+docker build -t bocan-agent-os .
+docker run -p 8000:8000 bocan-agent-os
+```
+
+### Railway / Render
+```bash
+# 1. Push to GitHub
+# 2. Connect to Railway.app
+# 3. Start command: uvicorn web.standalone:app --host 0.0.0.0 --port $PORT
+```
+
+### Cloudflare Pages（仅前端）
+```bash
+# 1. Fork 本仓库
+# 2. Cloudflare Pages → 连接到 GitHub
+# 3. 构建命令留空，输出目录：web
+```
+
+详细部署文档：[DEPLOY.md](DEPLOY.md)
+
+## 🏗️ 五层架构
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -24,129 +75,54 @@
 │  ③ 技能总线层     Skill Hub (标准化接口)                   │
 │     └─ queue_skill / inventory_skill / coupon_skill      │
 ├─────────────────────────────────────────────────────────────┤
-│  ④ 抓手调度层     Claw Router                            │
+│  ④ 抓手调度层     Claw Router                             │
 │     ├─ API Claw (白盒)   美团开放平台                     │
-│     ├─ Protocol Hook (灰盒)  抓包逆向 App 接口            │
+│     ├─ Protocol Hook (灰盒)  抓包逆向 App 接口           │
 │     ├─ Web RPA (黑盒)     Playwright 模拟操作              │
-│     └─ IoT Vision (物理)  摄像头/VLM 判翻台               │
+│     └─ IoT Vision (物理)  摄像头/VLM 判翻台              │
 ├─────────────────────────────────────────────────────────────┤
-│  ⑤ 安全基建层     Identity Vault (凭证加密+自动刷新)       │
+│  ⑤ 安全基建层     Identity Vault (凭证加密+自动刷新)      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 核心概念
+## 🛡️ HITL 审批机制
 
-### Skill（技能）
-标准化的技能模块，通过统一接口调用：
+| 等级 | 操作 | 处理方式 |
+|------|------|---------|
+| 🟢 GREEN | 查数据、读状态 | Agent 全自动 |
+| 🟡 YELLOW | 发券、回评 | Agent 执行 + 日志记录 |
+| 🔴 RED | 退款、退单、改价 | 只生成草稿，人工审批 |
+
+## 📁 项目结构
+
+```
+bocan-agent-os/
+├── bocan/
+│   ├── brain/          # 意图规划 + 记忆
+│   ├── claw/           # 抓手层
+│   ├── core/           # 核心 Agent
+│   ├── infra/          # Vault + 限流 + 反爬
+│   ├── skill_hub/      # Skill 总线
+│   └── skills/         # 四大 Skill 实现
+├── web/
+│   ├── standalone.py   # Web Dashboard
+│   └── dashboard.html  # 前端页面
+├── skills/             # 外部 Skill 扩展
+├── DEPLOY.md           # 部署指南
+└── pyproject.toml
+```
+
+## 📚 Skill 开发
 
 ```python
 from bocan.skills.meituan_queue import MeituanQueueSkill
 
 skill = MeituanQueueSkill()
-result = await skill.execute(claw, {"action": "get_queue", "shop_id": "123"})
-# → {"wait_count": 8, "avg_wait_min": 35}
+result = await skill.execute(claw, context)
 ```
 
-### Claw（抓手）
-对接不同平台的执行器，自动路由：
+详见 [DEPLOY.md](DEPLOY.md) 的「开发调试」和「Skill API 参考」。
 
-```python
-# Agent 根据 manifest 配置自动选择正确的 Claw
-claw = claw_router.route("meituan_queue")  # → MeituanQueueClaw
-result = await claw.execute("get_queue_status", {"shop_id": "..."})
-```
+## 📄 License
 
-### HITL（人在环）
-三级安全机制：
-
-| 等级 | 操作 | 示例 | 处理方式 |
-|------|------|------|---------|
-| 🟢 GREEN | 读操作 | 查询排队数 | Agent 全自动 |
-| 🟡 YELLOW | 软写 | 发优惠券 | 自动执行 + 日志 |
-| 🔴 RED | 硬写 | 退单/改价 | 只生成草稿，等待审批 |
-
-## 快速开始
-
-### 安装
-
-```bash
-pip install bocan-agent-os
-```
-
-### 初始化门店
-
-```bash
-bocan init
-# 按向导填写：门店名、人设、平台接入情况
-```
-
-### 启动对话
-
-```bash
-bocan run --manifest ./tenant_manifest.json
-```
-
-示例对话：
-```
-你: 帮我看看现在排队多少人
-AI店长: 当前等位8桌，预计等候35分钟
-
-你: 有顾客等了40分钟了，发张优惠券挽留一下
-AI店长: ✅ 已自动发放10元代金券给顾客
-
-你: 把三鲜水饺下架
-AI店长: ⏳ 操作需要审批：
-
-【待审批操作草稿】
-动作: 将"三鲜水饺"标记为售罄
-影响: 美团、饿了么、门店POS同步更新
-建议: [同意] [修改] [取消]
-```
-
-## 项目结构
-
-```
-bocan-agent-os/
-├── bocan/
-│   ├── core/          # 核心类型、Agent基类
-│   ├── brain/         # 意图规划、记忆系统
-│   ├── skill_hub/    # 技能总线
-│   ├── claw/         # 抓手路由层
-│   ├── infra/         # 凭证库、安全基建
-│   └── skills/        # 平台Skills实现
-│       └── meituan_queue.py
-├── examples/          # 使用示例
-└── tests/             # 测试
-```
-
-## 开发自己的 Skill
-
-```python
-from bocan.skill_hub.hub import BaseSkill, SkillHub
-from bocan.core.types import SkillResult
-
-class MyRestaurantSkill(BaseSkill):
-    name = "my_skill"
-    description = "我的自定义技能"
-    required_claws = ["my_claw"]
-    
-    async def execute(self, claw, context: dict) -> SkillResult:
-        result = await claw.execute("my_action", context)
-        return SkillResult(
-            skill_name=self.name,
-            success=True,
-            data=result
-        )
-
-# 注册到总线
-hub = SkillHub()
-hub.register(MyRestaurantSkill())
-```
-
-## 合规声明
-
-⚠️ 本项目仅供技术研究学习。逆向工程和抓包可能违反平台服务协议，使用者需自行承担风险。
-
-## License
-
-MIT License
+MIT

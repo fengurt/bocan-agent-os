@@ -1,0 +1,18 @@
+# Cloudflare Pages 部署配置
+# 文档: https://developers.cloudflare.com/pages/
+
+[build]
+command = "echo 'Static site - no build needed'"
+output_dir = "web"
+
+[env.production]
+name = "bocan-agent-os"
+compatibility_date = "2025-01-01"
+
+# 注意：Cloudflare Pages 默认只托管静态文件
+# Python FastAPI 后端需要部署到 Cloudflare Workers 或其他平台
+# 
+# 推荐方案：
+# 1. 前端静态文件 → Cloudflare Pages (本配置)
+# 2. FastAPI 后端 → Cloudflare Workers (用 worker.js) 
+#    或 → Railway / Render / VPS
